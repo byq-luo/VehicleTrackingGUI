@@ -479,8 +479,7 @@ class DeepSense_Traffic_Management(tk.Frame):
             fourcc = cv2.VideoWriter_fourcc(*'DIVX')
             # date = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
             file = file.split("/")[-1].split(".")[0]
-            OUTPUT_FILE_NAME = 'C:\\Users\\GRH1COB\\Desktop\\smartcity\\Smartcity\\tracking\\output_video\\{}.mp4'.format(
-                file)
+            OUTPUT_FILE_NAME = 'C:\\Users\\GRH1COB\\Desktop\\smartcity\\Smartcity\\tracking\\output_video\\{}.mp4'.format(file)
             VIDEO_SCALE_RATIO = 0.5
             RATIO_OF_BELOW_BOX = 0.35
             _, frame = camera.read()
@@ -707,13 +706,13 @@ class DeepSense_Traffic_Management(tk.Frame):
                     cv2.putText(blank_image, '0', (480, 150), FONT, FONT_SCALE, FONT_COLOR, 1)
 
                     # Tractor Data:
-                    cv2.putText(blank_image, 'Tractor', (600, 30), FONT, FONT_SCALE_HEADING, FONT_COLOR, 1)
-                    cv2.putText(blank_image, 'No', (600, 50), FONT, FONT_SCALE, FONT_COLOR, 1)
-                    cv2.putText(blank_image, 'No', (600, 70), FONT, FONT_SCALE, FONT_COLOR, 1)
-                    cv2.putText(blank_image, '0', (600, 90), FONT, FONT_SCALE, FONT_COLOR, 1)
-                    cv2.putText(blank_image, '0', (600, 110), FONT, FONT_SCALE, FONT_COLOR, 1)
-                    cv2.putText(blank_image, '0', (600, 130), FONT, FONT_SCALE, FONT_COLOR, 1)
-                    cv2.putText(blank_image, '0', (600, 150), FONT, FONT_SCALE, FONT_COLOR, 1)
+                    cv2.putText(blank_image, 'Tractor', (630, 30), FONT, FONT_SCALE_HEADING, FONT_COLOR, 1)
+                    cv2.putText(blank_image, 'No', (630, 50), FONT, FONT_SCALE, FONT_COLOR, 1)
+                    cv2.putText(blank_image, 'No', (630, 70), FONT, FONT_SCALE, FONT_COLOR, 1)
+                    cv2.putText(blank_image, '0', (630, 90), FONT, FONT_SCALE, FONT_COLOR, 1)
+                    cv2.putText(blank_image, '0', (630, 110), FONT, FONT_SCALE, FONT_COLOR, 1)
+                    cv2.putText(blank_image, '0', (630, 130), FONT, FONT_SCALE, FONT_COLOR, 1)
+                    cv2.putText(blank_image, '0', (630, 150), FONT, FONT_SCALE, FONT_COLOR, 1)
 
                 else:
                     cv2.putText(blank_image, 'Counting Not Turned On', (10, 30), FONT, FONT_SCALE, FONT_COLOR, 1)

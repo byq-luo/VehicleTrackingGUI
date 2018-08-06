@@ -138,7 +138,6 @@ while frame is not None:
     cv2.putText(blank_image, '0', (600, 130), FONT, FONT_SCALE, FONT_COLOR, 1)
     cv2.putText(blank_image, '0', (600, 150), FONT, FONT_SCALE, FONT_COLOR, 1)
 
-
     img = np.row_stack((frame, blank_image))
     fheight = img.shape[0]
     fwidth = img.shape[1]

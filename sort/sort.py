@@ -377,7 +377,7 @@ class Sort(object):
             # #else :
             #    rama[3] = 0
 
-            if vehicle_vel < -5:
+            if vehicle_vel < -7:
                 # print(vehicle_vel)
                 # print(c)
                 for k in range(len(garg)):
