@@ -23,8 +23,6 @@ from numba import jit
 from sklearn.utils.linear_assignment_ import linear_assignment
 
 
-
-
 @jit
 def iou(bb_test, bb_gt):
     """
@@ -118,24 +116,14 @@ class KalmanBoxTracker(object):
         """
         Advances the state vector and returns the predicted bounding box estimate.
         """
-        if ((self.kf.x[6] + self.kf.x[2]) <= 0):
+        if (self.kf.x[6] + self.kf.x[2]) <= 0:
             self.kf.x[6] *= 0.0
         self.kf.predict()
-        # print(self.kf.x)
         self.age += 1
-        if (self.time_since_update > 0):
+        if self.time_since_update > 0:
             self.hit_streak = 0
         self.time_since_update += 1
-        # print(self.kf.x)
         self.history.append(convert_x_to_bbox(self.kf.x))
-        # vel = self.history[0]
-        # ab = vel[0]
-        # ab = np.append(ab, self.kf.x[6])
-        # vel = np.array([ab])
-        ##self.history = np.array([vel])
-
-        # self.history[-1] = np.array(vel)
-        # print(self.history[-1])
         return self.history[-1]
 
     def get_state(self):
@@ -148,28 +136,49 @@ class KalmanBoxTracker(object):
 def associate_detections_to_trackers(detections, trackers, iou_threshold=0.1):
     """
     Assigns detections to tracked object (both represented as bounding boxes)
-
     Returns 3 lists of matches, unmatched_detections and unmatched_trackers
+    The unmatched detections and trackers returned ought to be deleted from the original matrices as they are no longer necessary
+    :param detections: the detections returned from the yolo net
+    :param trackers: the list of trackers maintained by the previous stage of kalman filter
+    :param iou_threshold: the threshold which is used to tweak false predictions
+    :return: matches, unmatched detections, unmatched trackers
     """
-    if (len(trackers) == 0):
+
+    if len(trackers) == 0:
         return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
     iou_matrix = np.zeros((len(detections), len(trackers)), dtype=np.float32)
-
+    """
+    Calculating the cost matrix for linear assingment
+    """
     for d, det in enumerate(detections):
         for t, trk in enumerate(trackers):
             iou_matrix[d, t] = iou(det, trk)
+    """
+    Linear Assignment chooses the most efficient set of groups given a set of possible cost values, in the cost matrix. Please google for further clarity
+    """
     matched_indices = linear_assignment(-iou_matrix)
 
+    """
+    Calculating unmatched detections that have not been mapped to trackers
+    """
     unmatched_detections = []
     for d, det in enumerate(detections):
         if (d not in matched_indices[:, 0]):
             unmatched_detections.append(d)
+
+    """
+    Calculating unmatched trackers that have not been mapped to detections
+    """
+
     unmatched_trackers = []
     for t, trk in enumerate(trackers):
         if (t not in matched_indices[:, 1]):
             unmatched_trackers.append(t)
 
     # filter out matched with low IOU
+    """
+    Filtering detections and trackers that are below the IOU threshold. 
+    """
     matches = []
     for m in matched_indices:
         if (iou_matrix[m[0], m[1]] < iou_threshold):
@@ -177,11 +186,10 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.1):
             unmatched_trackers.append(m[1])
         else:
             matches.append(m.reshape(1, 2))
-    if (len(matches) == 0):
+    if len(matches) == 0:
         matches = np.empty((0, 2), dtype=int)
     else:
         matches = np.concatenate(matches, axis=0)
-
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 
@@ -206,7 +214,7 @@ class Sort(object):
         self.ch = []
         self.ch1 = []
         self.name = []
-        self.rama = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        self.vehicle_count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         self.car_c_neg = []
         self.bus_c_neg = []
         self.motorbike_c_neg = []
@@ -218,15 +226,29 @@ class Sort(object):
         self.line_coordinate = []
         self.new_video = False
         self.frame_rate = 0
-
-    def update(self, dets, garg):
+        self.SECONDS_TO_CALCULATE_AVERAGE = 2 * 60
+        self.MOVING_AVG_WINDOW = 6 * 60
+        self.prev_car_c_neg = 0
+        self.prev_car_c_pos = 0
+        self.prev_bus_c_neg = 0
+        self.prev_bus_c_pos = 0
+        self.prev_motorbike_c_neg = 0
+        self.prev_motorbike_c_pos = 0
         """
-        Params:
-          dets - a numpy array of detections in the format [[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...]
+        Always specify velocity in positive values. The code takes care of inter changing the sign
+        """
+        self.POSITIVE_VELOCITY_THRESHOLD = 1
+        self.NEGATIVE_VELOCITY_THRESHOLD = 5
+
+    def update(self, dets, box_results):
+        """
         Requires: this method must be called once for each frame even with empty detections.
         Returns the a similar array, where the last column is the object ID.
-
         NOTE: The number of objects returned may differ from the number of detections provided.*
+
+        :param dets: a numpy array of detections in the format [[x1,y1,x2,y2,score],[x1,y1,x2,y2,score],...]
+        :param box_results: The bounding boxes for the detections
+        :return:
         """
 
         if self.new_video:
@@ -235,7 +257,7 @@ class Sort(object):
             self.ch = []
             self.ch1 = []
             self.name = []
-            self.rama = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            self.vehicle_count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
             self.car_c_neg = []
             self.bus_c_neg = []
             self.motorbike_c_neg = []
@@ -243,376 +265,226 @@ class Sort(object):
             self.bus_c_pos = []
             self.motorbike_c_pos = []
         self.frame_count += 1
-        #
-        scale_x = self.frame_width / 1780
-        scale_y = self.frame_height / 886
-
         trks = np.zeros((len(self.trackers), 5))
         to_del = []
         ret = []
-        # pos_vel = []
-        #
-        # global vel
-        # global i
-        # vel = 0
-        # i = 0
-        # print(trks,'hello')
-
+        """
+        Y = mX + c 
+        Calculated Slope(m) and Constant(c) of the line segment.  
+        """
         slope_line = (self.line_coordinate[1] - self.line_coordinate[3]) / (
                 self.line_coordinate[0] - self.line_coordinate[2])
 
         constant = self.line_coordinate[1] - (slope_line * self.line_coordinate[0])
 
+        """
+        Predicting the next state of the trackers using Kalman Filter
+        """
         for t, trk in enumerate(trks):
             pos = self.trackers[t].predict()[0]
-
-            # if(pos[4] <= 0):
-            #
-            #
-            #   vel = vel + pos[4]
-            #   i = i + 1
-
             trk[:] = [pos[0], pos[1], pos[2], pos[3], 0]
 
-            if (np.any(np.isnan(pos))):
+            if np.any(np.isnan(pos)):
                 to_del.append(t)
-        # if(vel == 0):
-        #     avg_vel = 0
-        # else :
-        #     avg_vel = vel / i
-        #     #print(vel)
-        # print(i)
-
+        """
+        Masked invalid method removes rows that have full 0 values. Refer to numpy docs for further clarification
+        """
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
 
         for t in reversed(to_del):
             self.trackers.pop(t)
 
+        """
+        Calling utility function to match detections with trackers. Refer to the method documentation for further clarification
+        """
         matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks)
-        # print(matched, unmatched_dets, unmatched_trks)
 
-        # update matched trackers with assigned detections
+        """
+        Update matched trackers with assigned detections, for already vehicles that are being tracked
+        """
+
         for t, trk in enumerate(self.trackers):
-            if (t not in unmatched_trks):
+            if t not in unmatched_trks:
                 d = matched[np.where(matched[:, 1] == t)[0], 0]
                 trk.update(dets[d, :][0])
 
-        # create and initialise new trackers for unmatched detections
+        """
+        Create and initialise new trackers for unmatched detections. These are the new objects detected. Adding them to allow tracking
+        """
 
         for i in unmatched_dets:
             trk = KalmanBoxTracker(dets[i, :])
-
-            # print(trk)
-
             self.trackers.append(trk)
-
         i = len(self.trackers)
-        # print(i)
-        # print('ok1')
-        # print(len(garg))
-        # print('ok2')
-        # print(len(dets))
-        # print('ok3')
 
         for trk in reversed(self.trackers):
             d = trk.get_state()[0]
             dl = np.array(d[0:4])
-            # print(dl)
-            # (trk.time_since_update < 1) and
-            # print(len(d))
-
-            if ((trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits)):
+            """
+            If new trackers are found, assign them a new id
+            """
+            if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
                 ret.append(np.concatenate((d, [trk.id + 1])).reshape(1, -1))  # +1 as MOT benchmark requires positive
             i -= 1
-            # remove dead tracklet
-            if (trk.time_since_update > self.max_age):
+            """
+            Remove Dead trackers
+            """
+            if trk.time_since_update > self.max_age:
                 self.trackers.pop(i)
-        # d = []
-        # print(len(ret)
-
         for t in range(len(ret)):
             a = ret[t]
-            # print(len(ret))
-
-            b = a[0]
-            # print(b)
-            # b contains the bounding box for the Detection along with class id and confidence
+            b = a[0]  # b contains the bounding box for the Detection along with class id and confidence
             c = b[5]  # Detection Id
             vehicle_vel = b[4]  # velocity of the detection
             de = b[1]  # upper left y coordinate
             cd = b[0]  # upper left x coordinate
-            new_var = b[2]  # bottom right corner x
-            line_eq_1_left = (de - slope_line * cd - constant)
-            line_eq_1_right = (c - slope_line * new_var - constant)
-            line_eq_2 = line_eq_1_left + (135 * scale_y)
-            line_eq_3 = line_eq_1_left - (175 * scale_y)
-            xyz = 35 * b[2] - b[3] - 35 * 500 + 300
-
-            # # xyz = (de - (19/24)*cd)
-            # if(vehicle_vel< -.5):
-            #     for k in range(len(garg)):
-            #         full_info = garg[k]
-            #         if(((full_info[2]) - 30) <= de <= ((full_info[2]) + 30) and ((full_info[0]) - 30) <= cd <= ((full_info[0]) + 30)):
-            #             global vehicle_name
-            #             vehicle_name = full_info[4]
-            #             break
-            #         else: vehicle_name = 'nothing'
-            #
-            #     if(vehicle_name == 'car'):
-            #         if((-(25*scale_y)<= line_eq_1 <=(25*scale_y)) and (all([c!=x for x in self.ch]))): #and (xyz >= 0) ):
-            #
-            #             print("It is counted")
-            #             self.rama[0] = self.rama[0] + 1
-            #
-            #             self.ch.append(c)
-            #     if(vehicle_name == 'bus'):
-            #         if((-(10*scale_y) <= line_eq_2 <= (10*scale_y)) and (all([c!=x for x in self.ch]))): #and (xyz >= 0)):
-            #             self.rama[1] = self.rama[1] + 1
-            #             self.ch.append(c)
-            #
-            #     if(vehicle_name == 'motorbike'):
-            #         if((-(100*scale_y)<= line_eq_3 <= (100*scale_y)) and (all([c!=x for x in self.ch]))): #and (xyz >= 0)):
-            #             self.rama[2] = self.rama[2] + 1
-            #             self.ch.append(c)
-            # #else :
-            #    rama[3] = 0
-
-            if vehicle_vel < -7:
-                # print(vehicle_vel)
-                # print(c)
-                for k in range(len(garg)):
-                    full_info = garg[k]
-                    if (((full_info[2]) - 30) <= de <= ((full_info[2]) + 30) and ((full_info[0]) - 90) <= cd <= (
-                            (full_info[0]) + 90)):
+            x1, y1, x2, y2 = b[0], b[1], b[2], b[3]
+            """
+            Calculating for Negative Velocity
+            """
+            if vehicle_vel < -self.NEGATIVE_VELOCITY_THRESHOLD:
+                for full_info in box_results:
+                    """
+                    Checking if the Kalman prediction is within the permissible limits
+                    """
+                    if ((full_info[2]) - 30) <= de <= ((full_info[2]) + 30) and ((full_info[0]) - 90) <= cd <= ((full_info[0]) + 90):
                         global vehicle_name
                         vehicle_name = full_info[4]
                         break
                     else:
                         vehicle_name = 'nothing'
-                x1, y1, x2, y2 = b[0], b[1], b[2], b[3]
-                min = 100
                 if c not in self.ch1:
-                    # Checks if the line segment intersects the borders of the bounding box
-                    for i in range(0, int(y2 - y1)):
-                        y = y1 + i
-                        y_temp = slope_line * x1 + constant
-                        diff = abs(y - y_temp)
-                        if diff < min:
-                            min = diff
-                        y_temp = slope_line * x2 + constant
-                        diff = abs(y - y_temp)
-                        if diff < min:
-                            min = diff
-                    for j in range(0, int(x2 - x1)):
-                        x = x1 + j
-                        y_temp = slope_line * x + constant
-                        diff = abs(y1 - y_temp)
-                        if diff < min:
-                            min = diff
-                        y_temp = slope_line * x + constant
-                        diff = abs(y2 - y_temp)
-                        if diff < min:
-                            min = diff
-
-                    if int(min) == 0:
+                    """
+                    Checks if the line segment intersects the borders of the bounding box
+                    """
+                    if self.verify_line_intersection(slope_line, constant, x1, x2, y1, y2):
                         if vehicle_name == 'car':
-                            self.rama[0] += 1
+                            self.vehicle_count[0] += 1
                             self.ch1.append(c)
                         if vehicle_name == 'bus':
-                            self.rama[1] += 1
+                            self.vehicle_count[1] += 1
                             self.ch1.append(c)
                         if vehicle_name == 'motorbike':
-                            self.rama[2] += 1
+                            self.vehicle_count[2] += 1
                             self.ch1.append(c)
-                # if (vehicle_name == 'car'):
-                #     if (((500 <= new_var <= 1200) or (500 <= cd <= 800)) and (all([c != x for x in self.ch1]))):
-                #         global rama
-                #         self.rama[0] = self.rama[0] + 1
-                #         # print(c)
-                #         # print('car')
-                #
-                #         self.ch1.append(c)
-                # if (vehicle_name == 'bus'):
-                #     if ((500 <= new_var <= 700) and (all([c != x for x in self.ch1]))):
-                #         self.rama[1] = self.rama[1] + 1
-                #         # print(c)
-                #         # print('bus')
-                #
-                #         self.ch1.append(c)
-                #
-                # if (vehicle_name == 'motorbike'):
-                #     if ((500 <= new_var <= 1200) and (all([c != x for x in self.ch1]))):
-                #         self.rama[2] = self.rama[2] + 1
-                #         # print(c)
-                #         # print('bike')
-                #         # print(rama)
-                #         # print(c)
-                #
-                #         self.ch1.append(c)
-            if vehicle_vel > 1:
-                # print(vehicle_vel)
-                # print(c)
-                for k in range(len(garg)):
-                    full_info = garg[k]
+            """
+            Calculating for positive velocity.
+            """
+            if vehicle_vel > self.POSITIVE_VELOCITY_THRESHOLD:
+                for k in range(len(box_results)):
+                    full_info = box_results[k]
                     if (((full_info[2]) - 30) <= de <= ((full_info[2]) + 30) and ((full_info[0]) - 90) <= cd <= (
                             (full_info[0]) + 90)):
-
                         vehicle_name = full_info[4]
                         break
                     else:
                         vehicle_name = 'nothing'
-                x1, y1, x2, y2 = b[0], b[1], b[2], b[3]
-                min = 100
                 if c not in self.ch:
-                    for i in range(0, int(y2 - y1)):
-                        y = y1 + i
-                        y_temp = slope_line * x1 + constant
-                        diff = abs(y - y_temp)
-                        if diff < min:
-                            min = diff
-                        y_temp = slope_line * x2 + constant
-                        diff = abs(y - y_temp)
-                        if diff < min:
-                            min = diff
-                    for j in range(0, int(x2 - x1)):
-                        x = x1 + j
-                        y_temp = slope_line * x + constant
-                        diff = abs(y1 - y_temp)
-                        if diff < min:
-                            min = diff
-                        y_temp = slope_line * x + constant
-                        diff = abs(y2 - y_temp)
-                        if diff < min:
-                            min = diff
-                    if int(min) == 0:
-                        if (vehicle_name == 'car'):
-                            self.rama[4] = self.rama[4] + 1
+                    if self.verify_line_intersection(slope_line, constant, x1, x2, y1, y2):
+                        if vehicle_name == 'car':
+                            self.vehicle_count[4] = self.vehicle_count[4] + 1
                             self.ch.append(c)
-                        if (vehicle_name == 'bus'):
-                            self.rama[5] = self.rama[5] + 1
+                        if vehicle_name == 'bus':
+                            self.vehicle_count[5] = self.vehicle_count[5] + 1
                             self.ch.append(c)
-                        if (vehicle_name == 'motorbike'):
-                            self.rama[6] = self.rama[6] + 1
+                        if vehicle_name == 'motorbike':
+                            self.vehicle_count[6] = self.vehicle_count[6] + 1
                             self.ch.append(c)
-                # if (vehicle_name == 'car'):
-                #     # if(((500 <= cd <= 800) or (500 <= new_var <= 800)) and (all([c!=x for x in self.ch]))):
-                #     if (((400 <= b[3] <= 500) and (b[2] > 500) and (all([c != x for x in self.ch])))):
-                #         self.rama[4] = self.rama[4] + 1
-                #         # print(c)
-                #         # print('car')
-                #
-                #         self.ch.append(c)
-                # if (vehicle_name == 'bus'):
-                #     if ((500 <= cd <= 700) and (all([c != x for x in self.ch]))):
-                #         # self.rama[5] = self.rama[5] + 1
-                #         # print(c)
-                #         # print('bus')
-                #
-                #         self.ch.append(c)
-                #
-                # if (vehicle_name == 'motorbike'):
-                #     if ((1000 <= cd <= 1400) and (all([c != x for x in self.ch]))):
-                #         # self.rama[6] = self.rama[6] + 1
-                #         # print(c)
-                #         # print('bike')
-                #         # print(rama)
-                #         # print(c)
-                #
-                #         self.ch.append(c)
-
-            # self.rama [3] = avg_vel
-            b = np.append(b, self.rama)
+            # self.vehicle_count[3] = avg_vel
+            b = np.append(b, self.vehicle_count)
             a = np.array([b])
             ret[t] = np.array(a)
-        self.car_c_neg.append(self.rama[0])
-        self.bus_c_neg.append(self.rama[1])
-        self.motorbike_c_neg.append(self.rama[2])
-        self.car_c_pos.append(self.rama[4])
-        self.bus_c_pos.append(self.rama[5])
-        self.motorbike_c_pos.append(self.rama[6])
+        """
+        Appending count
+        c_neg = Count Negative | in flow
+        c_pos = Count Positive | out flow
+        """
+        avg_frame_count = self.SECONDS_TO_CALCULATE_AVERAGE * self.frame_rate
+        if self.frame_count % avg_frame_count == 0 and self.frame_count >= avg_frame_count:
+            """
+            Comparing values from history to find the number of vehicles passed in 1 sec
+            """
+            self.car_c_neg.append((self.vehicle_count[0] - self.prev_car_c_neg))
+            self.bus_c_neg.append(self.vehicle_count[1] - self.prev_bus_c_neg)
+            self.motorbike_c_neg.append(self.vehicle_count[2] - self.prev_motorbike_c_neg)
+            self.car_c_pos.append(self.vehicle_count[4] - self.prev_car_c_pos)
+            self.bus_c_pos.append(self.vehicle_count[5] - self.prev_bus_c_pos)
+            self.motorbike_c_pos.append(self.vehicle_count[6] - self.prev_motorbike_c_pos)
 
-        avg_frame = 20 * self.frame_rate
-        real_var = self.frame_count - avg_frame
+            """
+            Updating history
+            """
+            self.prev_car_c_neg = self.vehicle_count[0]
+            self.prev_bus_c_neg = self.vehicle_count[1]
+            self.prev_motorbike_c_neg = self.vehicle_count[2]
+            self.prev_car_c_pos = self.vehicle_count[4]
+            self.prev_bus_c_pos = self.vehicle_count[5]
+            self.prev_motorbike_c_pos = self.vehicle_count[6]
 
-        if (real_var >= 0):
-            self.rama[7] = self.car_c_neg[int(avg_frame) - 1] - self.car_c_neg[0]
-            self.rama[8] = self.bus_c_neg[int(avg_frame) - 1] - self.bus_c_neg[0]
-            self.rama[9] = self.motorbike_c_neg[int(avg_frame) - 1] - self.motorbike_c_neg[0]
-            self.rama[10] = self.car_c_pos[int(avg_frame) - 1] - self.car_c_pos[0]
-            self.rama[11] = self.bus_c_pos[int(avg_frame) - 1] - self.bus_c_pos[0]
-            self.rama[12] = self.motorbike_c_pos[int(avg_frame) - 1] - self.motorbike_c_pos[0]
-            self.car_c_neg.pop(0)
-            self.bus_c_neg.pop(0)
-            self.motorbike_c_neg.pop(0)
-            self.car_c_pos.pop(0)
-            self.bus_c_pos.pop(0)
-            self.motorbike_c_pos.pop(0)
+            if self.frame_count % (self.MOVING_AVG_WINDOW * self.frame_rate) == 0:
+                """
+                Moving Average Calculation
+                """
+                self.vehicle_count[7] = round(sum(self.car_c_neg) / self.car_c_neg.__len__()) if self.car_c_neg.__len__() > 0 else 0
+                self.vehicle_count[8] = round(sum(self.bus_c_neg) / self.bus_c_neg.__len__()) if self.car_c_neg.__len__() > 0 else 0
+                self.vehicle_count[9] = round(sum(self.motorbike_c_neg) / self.motorbike_c_neg.__len__()) if self.car_c_neg.__len__() > 0 else 0
+                self.vehicle_count[10] = round(sum(self.car_c_pos) / self.car_c_pos.__len__()) if self.car_c_neg.__len__() > 0 else 0
+                self.vehicle_count[11] = round(sum(self.bus_c_pos) / self.bus_c_pos.__len__()) if self.car_c_neg.__len__() > 0 else 0
+                self.vehicle_count[12] = round(sum(self.motorbike_c_pos) / self.motorbike_c_pos.__len__()) if self.car_c_neg.__len__() > 0 else 0
+                self.car_c_neg.pop(0)
+                self.bus_c_neg.pop(0)
+                self.motorbike_c_neg.pop(0)
+                self.car_c_pos.pop(0)
+                self.bus_c_pos.pop(0)
+                self.motorbike_c_pos.pop(0)
 
-        if (len(ret) > 0):
+        if len(ret) > 0:
             return np.concatenate(ret)
         return np.empty((0, 5))
 
-# def parse_args():
-#    """Parse input arguments."""
-#    parser = argparse.ArgumentParser(description='SORT demo')
-#    parser.add_argument('--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
-#    args = parser.parse_args()
-#    return args
+    def verify_line_boundaries(self, x, y):
+        """
+        Utility function to check if the given point lies within the line segment co-ordinates
+        :param x: x co-ordinate of the point
+        :param y: y co-ordinate of the point
+        :return: True if the given point lie within the line segment region
+        """
+        y_max = self.line_coordinate[1] if self.line_coordinate[1] > self.line_coordinate[3] else self.line_coordinate[3]
+        y_min = self.line_coordinate[1] if self.line_coordinate[1] < self.line_coordinate[3] else self.line_coordinate[3]
+        x_max = self.line_coordinate[2] if self.line_coordinate[2] > self.line_coordinate[0] else self.line_coordinate[0]
+        x_min = self.line_coordinate[2] if self.line_coordinate[2] < self.line_coordinate[0] else self.line_coordinate[0]
+        return (x_min <= x <= x_max) and (y_min <= y <= y_max)
 
-##if __name__ == '__main__':
-#  # all train
-#  sequences = ['PETS09-S2L1','TUD-Campus','TUD-Stadtmitte','ETH-Bahnhof','ETH-Sunnyday','ETH-Pedcross2','KITTI-13','KITTI-17','ADL-Rundle-6','ADL-Rundle-8','Venice-2']
-#  args = parse_args()
-#  display = args.display
-#  phase = 'train'
-#  total_time = 0.0
-#  total_frames = 0
-#  colours = np.random.rand(32,3) #used only for display
-#  if(display):
-#    if not os.path.exists('mot_benchmark'):
-#      print('\n\tERROR: mot_benchmark link not found!\n\n    Create a symbolic link to the MOT benchmark\n    (https://motchallenge.net/data/2D_MOT_2015/#download). E.g.:\n\n    $ ln -s /path/to/MOT2015_challenge/2DMOT2015 mot_benchmark\n\n')
-#      exit()
-#    plt.ion()
-#    fig = plt.figure()
-
-#  if not os.path.exists('output'):
-#    os.makedirs('output')
-
-#  for seq in sequences:
-#    mot_tracker = Sort() #create instance of the SORT tracker
-#    seq_dets = np.loadtxt('data/%s/det.txt'%(seq),delimiter=',') #load detections
-#    with open('output/%s.txt'%(seq),'w') as out_file:
-#      print("Processing %s."%(seq))
-#      for frame in range(int(seq_dets[:,0].max())):
-#        frame += 1 #detection and frame numbers begin at 1
-#        dets = seq_dets[seq_dets[:,0]==frame,2:7]
-#        dets[:,2:4] += dets[:,0:2] #convert to [x1,y1,w,h] to [x1,y1,x2,y2]
-#        total_frames += 1
-
-#        if(display):
-#          ax1 = fig.add_subplot(111, aspect='equal')
-#          fn = 'mot_benchmark/%s/%s/img1/%06d.jpg'%(phase,seq,frame)
-#          im =io.imread(fn)
-#          ax1.imshow(im)
-#          plt.title(seq+' Tracked Targets')
-
-#        start_time = time.time()
-#        trackers = mot_tracker.update(dets)
-#        cycle_time = time.time() - start_time
-#        total_time += cycle_time
-
-#        for d in trackers:
-#          print('%d,%d,%.2f,%.2f,%.2f,%.2f,1,-1,-1,-1'%(frame,d[4],d[0],d[1],d[2]-d[0],d[3]-d[1]),file=out_file)
-#          if(display):
-#            d = d.astype(np.int32)
-#            ax1.add_patch(patches.Rectangle((d[0],d[1]),d[2]-d[0],d[3]-d[1],fill=False,lw=3,ec=colours[d[4]%32,:]))
-#            ax1.set_adjustable('box-forced')
-
-#        if(display):
-#          fig.canvas.flush_events()
-#          plt.draw()
-#          ax1.cla()
-
-#  print("Total Tracking took: %.3f for %d frames or %.1f FPS"%(total_time,total_frames,total_frames/total_time))
-#  if(display):
-#    print("Note: to get real runtime results run without the option: --display")
+    def verify_line_intersection(self, slope_line, constant, x1, x2, y1, y2):
+        """
+        Utility function to check if the bounding box intersects the line or not.
+        :param slope_line: slope of line segment
+        :param constant: constant in the equation of line segement
+        :param x1: top left x co-ordinate of the bounding box
+        :param x2: bottom right x co-ordinate of the bounding box
+        :param y1: top left y co-ordinate of the bounding box
+        :param y2: bottom right y co-ordinate of the bounding box
+        :return:
+        """
+        minimum = 100
+        for i in range(0, int(y2 - y1)):
+            y = y1 + i
+            y_temp = slope_line * x1 + constant
+            diff = abs(y - y_temp)
+            if diff < minimum and self.verify_line_boundaries(x1, y):
+                minimum = diff
+            y_temp = slope_line * x2 + constant
+            diff = abs(y - y_temp)
+            if diff < minimum and self.verify_line_boundaries(x2, y):
+                minimum = diff
+        for j in range(0, int(x2 - x1)):
+            x = x1 + j
+            y_temp = slope_line * x + constant
+            diff = abs(y1 - y_temp)
+            if diff < minimum and self.verify_line_boundaries(x, y1):
+                minimum = diff
+            y_temp = slope_line * x + constant
+            diff = abs(y2 - y_temp)
+            if diff < minimum and self.verify_line_boundaries(x, y2):
+                minimum = diff
+        return round(minimum) == 0

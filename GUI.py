@@ -370,7 +370,6 @@ class DeepSense_Traffic_Management(tk.Frame):
             self.Tracker.new_video = True
             self.elapsed = 0
             self.Tracker.frame_count = 0
-
             self.start()
 
     def onStart(self, event):
@@ -479,7 +478,9 @@ class DeepSense_Traffic_Management(tk.Frame):
             fourcc = cv2.VideoWriter_fourcc(*'DIVX')
             # date = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
             file = file.split("/")[-1].split(".")[0]
+            # LOCATION = "\\\\BOSCH.COM\\DfsRB\\DfsIN\\LOC\\Cob\\NE1\\Function\\Aerospace_Deep_Sense\\02_Development\\05_Exchange_Folder\\08_Srinath\\Processed Video 9th August\\Toll Booth\\{}.mp4 ".format(file)
             OUTPUT_FILE_NAME = 'C:\\Users\\GRH1COB\\Desktop\\smartcity\\Smartcity\\tracking\\output_video\\{}.mp4'.format(file)
+            # OUTPUT_FILE_NAME = LOCATION
             VIDEO_SCALE_RATIO = 0.5
             RATIO_OF_BELOW_BOX = 0.35
             _, frame = camera.read()
@@ -597,7 +598,7 @@ class DeepSense_Traffic_Management(tk.Frame):
                 if self.confirm_line:
                     self.elapsed += 1
 
-                    vehicle_count = self.Tracker.rama
+                    vehicle_count = self.Tracker.vehicle_count
                     if self.track_car:
                         self.car_in_flow_widget.config(text="{}".format(vehicle_count[0]))
                         self.car_out_flow_widget.config(text="{}".format(vehicle_count[4]))
@@ -629,7 +630,7 @@ class DeepSense_Traffic_Management(tk.Frame):
                         vehicle_count[9] = 0
                         vehicle_count[12] = 0
 
-                    if self.elapsed % (5 * 60 * self.frame_rate) == 0:
+                    if self.elapsed % (5 * self.frame_rate) == 0:
                         total_current_in = vehicle_count[0] + vehicle_count[1] + vehicle_count[2]
                         total_current_out = vehicle_count[4] + vehicle_count[5] + vehicle_count[6]
                         bet_5sec_in = total_current_in - self.till_last_5sec_in

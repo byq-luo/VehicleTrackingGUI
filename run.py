@@ -9,7 +9,7 @@ def manual_seeting():
     FLAGS = argHandler()
     FLAGS.setDefaults()
 
-    FLAGS.demo = "Video/20180725_1320.mp4"  # video file to use, or if camera just put "camera"
+    FLAGS.demo = "Video/20180725_1320.mp4"  # Initial video file to use, or if camera just put "camera"
     FLAGS.model = "darkflow/cfg/yolo_smartcity.cfg"  # tensorflow model
     FLAGS.load = 37250  # tensorflow weights
     # FLAGS.pbLoad = "tiny-yolo-voc-traffic.pb" # tensorflow model
