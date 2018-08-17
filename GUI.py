@@ -468,7 +468,7 @@ class DeepSense_Traffic_Management(tk.Frame):
                 'file {} does not exist'.format(file)
 
             camera = cv2.VideoCapture(file)
-            self.frame_rate = camera.get(cv2.CAP_PROP_FPS)
+            self.frame_rate = round(camera.get(cv2.CAP_PROP_FPS))
 
             self.frame_height = camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
             self.frame_width = camera.get(cv2.CAP_PROP_FRAME_WIDTH)
