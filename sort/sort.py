@@ -148,7 +148,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.1):
         return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
     iou_matrix = np.zeros((len(detections), len(trackers)), dtype=np.float32)
     """
-    Calculating the cost matrix for linear assingment
+    Calculating the cost matrix for linear assignment
     """
     for d, det in enumerate(detections):
         for t, trk in enumerate(trackers):
@@ -163,7 +163,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.1):
     """
     unmatched_detections = []
     for d, det in enumerate(detections):
-        if (d not in matched_indices[:, 0]):
+        if d not in matched_indices[:, 0]:
             unmatched_detections.append(d)
 
     """
@@ -172,7 +172,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.1):
 
     unmatched_trackers = []
     for t, trk in enumerate(trackers):
-        if (t not in matched_indices[:, 1]):
+        if t not in matched_indices[:, 1]:
             unmatched_trackers.append(t)
 
     # filter out matched with low IOU
@@ -181,7 +181,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.1):
     """
     matches = []
     for m in matched_indices:
-        if (iou_matrix[m[0], m[1]] < iou_threshold):
+        if iou_matrix[m[0], m[1]] < iou_threshold:
             unmatched_detections.append(m[0])
             unmatched_trackers.append(m[1])
         else:

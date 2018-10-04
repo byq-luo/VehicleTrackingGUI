@@ -460,42 +460,42 @@ class DeepSense_Traffic_Management(tk.Frame):
             file = 0
             self.frame_rate = 1
             camera = cv2.VideoCapture(file)
-
-
+            date = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+            file = "LiveStream"+date
 
         else:
             assert os.path.isfile(file), \
                 'file {} does not exist'.format(file)
 
             camera = cv2.VideoCapture(file)
-            self.frame_rate = round(camera.get(cv2.CAP_PROP_FPS))
-
-            self.frame_height = camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
-            self.frame_width = camera.get(cv2.CAP_PROP_FRAME_WIDTH)
-            self.Tracker.frame_width = self.frame_width
-            self.Tracker.frame_height = self.frame_height
-            self.Tracker.frame_rate = self.frame_rate
-            fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-            # date = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
             file = file.split("/")[-1].split(".")[0]
-            # LOCATION = "\\\\BOSCH.COM\\DfsRB\\DfsIN\\LOC\\Cob\\NE1\\Function\\Aerospace_Deep_Sense\\02_Development\\05_Exchange_Folder\\08_Srinath\\Processed Video 9th August\\Toll Booth\\{}.mp4 ".format(file)
-            OUTPUT_FILE_NAME = 'C:\\Users\\GRH1COB\\Desktop\\smartcity\\Smartcity\\tracking\\output_video\\{}.mp4'.format(file)
-            # OUTPUT_FILE_NAME = LOCATION
-            VIDEO_SCALE_RATIO = 0.5
-            RATIO_OF_BELOW_BOX = 0.35
-            _, frame = camera.read()
-            frame = cv2.resize(frame, None, fx=VIDEO_SCALE_RATIO, fy=VIDEO_SCALE_RATIO,
-                               interpolation=cv2.INTER_LINEAR)
-            width = frame.shape[1]
-            height = frame.shape[0]
-            b_height = round(frame.shape[0] * RATIO_OF_BELOW_BOX)
+        self.frame_rate = round(camera.get(cv2.CAP_PROP_FPS))
 
-            blank_image = np.zeros((b_height, width, 3), np.uint8)
-            blank_image[np.where((blank_image == [0, 0, 0]).all(axis=2))] = [240, 240, 240]
-            img = np.row_stack((frame, blank_image))
-            fheight = img.shape[0]
-            fwidth = img.shape[1]
-            self.out = cv2.VideoWriter(OUTPUT_FILE_NAME, fourcc, self.frame_rate, (fwidth, fheight), True)
+        self.frame_height = camera.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.frame_width = camera.get(cv2.CAP_PROP_FRAME_WIDTH)
+        self.Tracker.frame_width = self.frame_width
+        self.Tracker.frame_height = self.frame_height
+        self.Tracker.frame_rate = self.frame_rate
+        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        # date = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+        # LOCATION = "\\\\BOSCH.COM\\DfsRB\\DfsIN\\LOC\\Cob\\NE1\\Function\\Aerospace_Deep_Sense\\02_Development\\05_Exchange_Folder\\08_Srinath\\Processed Video 9th August\\Toll Booth\\{}.mp4 ".format(file)
+        OUTPUT_FILE_NAME = 'C:\\Users\\GRH1COB\\Desktop\\smartcity\\Smartcity\\tracking\\output_video\\{}.mp4'.format(file)
+        # OUTPUT_FILE_NAME = LOCATION
+        VIDEO_SCALE_RATIO = 1
+        RATIO_OF_BELOW_BOX = 0.35
+        _, frame = camera.read()
+        frame = cv2.resize(frame, None, fx=VIDEO_SCALE_RATIO, fy=VIDEO_SCALE_RATIO,
+                           interpolation=cv2.INTER_LINEAR)
+        width = frame.shape[1]
+        height = frame.shape[0]
+        b_height = round(frame.shape[0] * RATIO_OF_BELOW_BOX)
+
+        blank_image = np.zeros((b_height, width, 3), np.uint8)
+        blank_image[np.where((blank_image == [0, 0, 0]).all(axis=2))] = [240, 240, 240]
+        img = np.row_stack((frame, blank_image))
+        fheight = img.shape[0]
+        fwidth = img.shape[1]
+        self.out = cv2.VideoWriter(OUTPUT_FILE_NAME, fourcc, self.frame_rate, (fwidth, fheight), True)
 
         return camera
 
@@ -565,7 +565,7 @@ class DeepSense_Traffic_Management(tk.Frame):
                 FONT_SCALE = 0.4
                 FONT_SCALE_HEADING = 0.6
                 FONT_COLOR = (0, 0, 0)
-                VIDEO_SCALE_RATIO = 0.5
+                VIDEO_SCALE_RATIO = 1
                 RATIO_OF_BELOW_BOX = 0.35
 
                 frame = cv2.resize(self.current_frame, None, fx=VIDEO_SCALE_RATIO, fy=VIDEO_SCALE_RATIO,
